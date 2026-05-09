@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, normalizeConfession } from '../lib/supabase'
 
 const styles = {
   wrapper: {
@@ -184,14 +184,17 @@ export default function Feed({ onBack }) {
 
   useEffect(() => {
     async function load() {
+      if (!supabase) { setLoading(false); return }
       const { data, error } = await supabase
         .from('confessions')
-        .select('id, content, created_at')
-        .eq('visibility', 'public')
+        .select('*')
         .eq('approved', true)
         .order('created_at', { ascending: false })
         .limit(50)
-      if (!error) setConfessions(data || [])
+      if (!error) {
+        const mapped = (data || []).map(normalizeConfession)
+        setConfessions(mapped.filter(c => !c.is_private))
+      }
       setLoading(false)
     }
     load()

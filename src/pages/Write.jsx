@@ -171,6 +171,7 @@ export default function Write({ onBack, onSubmitted }) {
     setSubmitting(true)
     setError('')
     try {
+      if (!supabase) throw new Error('not connected')
       const { error: dbError } = await supabase.from('confessions').insert({
         content: text.trim(),
         visibility: visibility,

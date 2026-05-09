@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, normalizeConfession } from '../lib/supabase'
 
 const styles = {
   wrapper: {
@@ -316,22 +316,25 @@ export default function Admin({ onBack }) {
   ]
 
   const loadData = async () => {
+    if (!supabase) { setLoading(false); return }
     setLoading(true)
-    let query = supabase
+    const { data, error } = await supabase
       .from('confessions')
       .select('*')
       .order('created_at', { ascending: false })
 
-    if (tab === 'pending') {
-      query = query.eq('visibility', 'public').eq('approved', false)
-    } else if (tab === 'public') {
-      query = query.eq('approved', true)
-    } else if (tab === 'private') {
-      query = query.eq('visibility', 'private')
+    if (!error) {
+      const all = (data || []).map(normalizeConfession)
+      let filtered = all
+      if (tab === 'pending') {
+        filtered = all.filter(c => !c.is_private && !c.approved)
+      } else if (tab === 'public') {
+        filtered = all.filter(c => c.approved)
+      } else if (tab === 'private') {
+        filtered = all.filter(c => c.is_private)
+      }
+      setConfessions(filtered)
     }
-
-    const { data, error } = await query
-    if (!error) setConfessions(data || [])
     setLoading(false)
   }
 
@@ -340,17 +343,20 @@ export default function Admin({ onBack }) {
   }, [authed, tab])
 
   const handleApprove = async (id) => {
+    if (!supabase) return
     await supabase.from('confessions').update({ approved: true }).eq('id', id)
     loadData()
   }
 
   const handleDelete = async (id) => {
     if (!confirm('delete forever?')) return
+    if (!supabase) return
     await supabase.from('confessions').delete().eq('id', id)
     loadData()
   }
 
   const handleUnpublish = async (id) => {
+    if (!supabase) return
     await supabase.from('confessions').update({ approved: false }).eq('id', id)
     loadData()
   }
