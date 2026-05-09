@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import Landing from './pages/Landing.jsx'
-import Write from './pages/Write.jsx'
-import ThankYou from './pages/ThankYou.jsx'
-import Feed from './pages/Feed.jsx'
-import Admin from './pages/Admin.jsx'
+import Landing from './Landing.jsx'
+import Write from './Write.jsx'
+import ThankYou from './ThankYou.jsx'
+import Feed from './Feed.jsx'
+import Admin from './Admin.jsx'
 
 const PAGES = {
   LANDING: 'landing',
