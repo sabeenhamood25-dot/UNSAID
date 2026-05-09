@@ -205,6 +205,23 @@ function formatDate(d) {
   })
 }
 
+// Schema normalization helpers
+function getConfessionText(row) {
+  return row.text || row.content || ""
+}
+
+function getIsPrivate(row) {
+  return row.is_private === true || row.visibility === "private"
+}
+
+function getIsPublic(row) {
+  return !getIsPrivate(row)
+}
+
+function getVisibilityLabel(row) {
+  return getIsPrivate(row) ? 'private' : 'public'
+}
+
 const ADMIN_PASS = import.meta.env.VITE_ADMIN_PASSWORD || 'unsaid2024'
 
 function Login({ onLogin, onBack }) {
@@ -257,19 +274,24 @@ function Login({ onLogin, onBack }) {
 }
 
 function ConfessionCard({ confession, onApprove, onDelete, onUnpublish, index }) {
+  const isPublic = getIsPublic(confession)
+  const approved = confession.approved
+  const text = getConfessionText(confession)
+  const visibility = getVisibilityLabel(confession)
+
   return (
     <div style={{ ...styles.card, animationDelay: `${0.05 + index * 0.06}s` }}>
-      <p style={styles.cardText}>{confession.content}</p>
+      <p style={styles.cardText}>{text}</p>
       <div style={styles.cardMeta}>
         <span style={styles.metaTag}>{formatDate(confession.created_at)}</span>
         <span style={{ ...styles.metaTag, textTransform: 'uppercase', fontSize: '0.62rem' }}>
-          {confession.visibility}
+          {visibility}
         </span>
-        {confession.approved && (
+        {approved && (
           <span style={{ ...styles.metaTag, color: 'var(--rust-faded)' }}>published</span>
         )}
 
-        {!confession.approved && confession.visibility === 'public' && (
+        {!approved && isPublic && (
           <button
             style={{ ...styles.actionBtn, color: 'var(--rust-faded)' }}
             onClick={() => onApprove(confession.id)}
@@ -279,7 +301,7 @@ function ConfessionCard({ confession, onApprove, onDelete, onUnpublish, index })
             approve →
           </button>
         )}
-        {confession.approved && (
+        {approved && (
           <button
             style={{ ...styles.actionBtn, color: 'var(--ink-whisper)' }}
             onClick={() => onUnpublish(confession.id)}
@@ -315,24 +337,45 @@ export default function Admin({ onBack }) {
     { id: 'all', label: 'all' },
   ]
 
-  const loadData = async () => {
-    setLoading(true)
-    let query = supabase
-      .from('confessions')
-      .select('*')
-      .order('created_at', { ascending: false })
+  const filterConfessions = (allRows) => {
+    let filtered = allRows
 
     if (tab === 'pending') {
-      query = query.eq('visibility', 'public').eq('approved', false)
+      filtered = allRows.filter(row => !row.approved && getIsPublic(row))
     } else if (tab === 'public') {
-      query = query.eq('approved', true)
+      filtered = allRows.filter(row => row.approved && getIsPublic(row))
     } else if (tab === 'private') {
-      query = query.eq('visibility', 'private')
+      filtered = allRows.filter(row => getIsPrivate(row))
     }
+    // 'all' tab: no filtering
 
-    const { data, error } = await query
-    if (!error) setConfessions(data || [])
-    setLoading(false)
+    return filtered.sort((a, b) => {
+      const dateA = new Date(a.created_at || 0).getTime()
+      const dateB = new Date(b.created_at || 0).getTime()
+      return dateB - dateA
+    })
+  }
+
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('confessions')
+        .select('*')
+
+      if (error) {
+        console.error('Supabase error fetching confessions:', error)
+        setConfessions([])
+      } else {
+        const filtered = filterConfessions(data || [])
+        setConfessions(filtered)
+      }
+    } catch (err) {
+      console.error('Error loading confessions:', err)
+      setConfessions([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -340,19 +383,34 @@ export default function Admin({ onBack }) {
   }, [authed, tab])
 
   const handleApprove = async (id) => {
-    await supabase.from('confessions').update({ approved: true }).eq('id', id)
-    loadData()
+    try {
+      const { error } = await supabase.from('confessions').update({ approved: true }).eq('id', id)
+      if (error) console.error('Supabase error approving:', error)
+      loadData()
+    } catch (err) {
+      console.error('Error approving confession:', err)
+    }
   }
 
   const handleDelete = async (id) => {
     if (!confirm('delete forever?')) return
-    await supabase.from('confessions').delete().eq('id', id)
-    loadData()
+    try {
+      const { error } = await supabase.from('confessions').delete().eq('id', id)
+      if (error) console.error('Supabase error deleting:', error)
+      loadData()
+    } catch (err) {
+      console.error('Error deleting confession:', err)
+    }
   }
 
   const handleUnpublish = async (id) => {
-    await supabase.from('confessions').update({ approved: false }).eq('id', id)
-    loadData()
+    try {
+      const { error } = await supabase.from('confessions').update({ approved: false }).eq('id', id)
+      if (error) console.error('Supabase error unpublishing:', error)
+      loadData()
+    } catch (err) {
+      console.error('Error unpublishing confession:', err)
+    }
   }
 
   if (!authed) {

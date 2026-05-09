@@ -126,6 +126,19 @@ const styles = {
   },
 }
 
+// Schema normalization helpers
+function getConfessionText(row) {
+  return row.text || row.content || ""
+}
+
+function getIsPrivate(row) {
+  return row.is_private === true || row.visibility === "private"
+}
+
+function getIsPublic(row) {
+  return !getIsPrivate(row)
+}
+
 function formatDate(dateStr) {
   const d = new Date(dateStr)
   return d.toLocaleDateString('en-GB', {
@@ -144,7 +157,8 @@ function truncate(text, len = 180) {
 
 function Entry({ confession, index }) {
   const [expanded, setExpanded] = useState(false)
-  const { short, truncated } = truncate(confession.content)
+  const text = getConfessionText(confession)
+  const { short, truncated } = truncate(text)
 
   return (
     <div
@@ -164,7 +178,7 @@ function Entry({ confession, index }) {
         </div>
       ) : (
         <div>
-          <p style={styles.entryText}>{confession.content}</p>
+          <p style={styles.entryText}>{text}</p>
           <span
             style={styles.collapseHint}
             onClick={() => setExpanded(false)}
@@ -184,15 +198,28 @@ export default function Feed({ onBack }) {
 
   useEffect(() => {
     async function load() {
-      const { data, error } = await supabase
-        .from('confessions')
-        .select('id, content, created_at')
-        .eq('visibility', 'public')
-        .eq('approved', true)
-        .order('created_at', { ascending: false })
-        .limit(50)
-      if (!error) setConfessions(data || [])
-      setLoading(false)
+      try {
+        const { data, error } = await supabase
+          .from('confessions')
+          .select('*')
+          .eq('approved', true)
+          .order('created_at', { ascending: false })
+          .limit(50)
+
+        if (error) {
+          console.error('Supabase error fetching feed:', error)
+          setConfessions([])
+        } else {
+          // Filter for public confessions (both schema versions)
+          const publicConfessions = (data || []).filter(row => getIsPublic(row))
+          setConfessions(publicConfessions)
+        }
+      } catch (err) {
+        console.error('Error loading feed:', err)
+        setConfessions([])
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [])

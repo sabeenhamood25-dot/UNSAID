@@ -171,16 +171,25 @@ export default function Write({ onBack, onSubmitted }) {
     setSubmitting(true)
     setError('')
     try {
+      const confessionText = text.trim()
+      const isPrivate = visibility === 'private'
+
       const { error: dbError } = await supabase.from('confessions').insert({
-        content: text.trim(),
-        visibility: visibility,
+        // New schema
+        text: confessionText,
+        is_private: isPrivate,
+        // Legacy schema (for backwards compatibility)
+        content: confessionText,
+        visibility: isPrivate ? 'private' : 'public',
+        // Common fields
         approved: false,
         created_at: new Date().toISOString(),
       })
       if (dbError) throw dbError
+      console.log('Confession submitted successfully')
       onSubmitted()
     } catch (err) {
-      console.error(err)
+      console.error('Error submitting confession:', err)
       setError('something went quiet. try again.')
       setSubmitting(false)
     }
